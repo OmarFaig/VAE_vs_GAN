@@ -16,8 +16,6 @@ def save_images(dataset, split_name,output_dir,preprocess=None):
             image = transforms.ToPILImage()(image)
         image_path = os.path.join(split_dir, f'image_{idx}.png')
         image.save(image_path,"jpeg")
-
-
 # Save preprocessed training images
 def plot_random_images(dataset_path, num_images=15, rows=3, cols=5):
     images=[]
