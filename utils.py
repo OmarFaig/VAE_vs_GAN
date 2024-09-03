@@ -4,6 +4,11 @@ import matplotlib.pyplot as plt # type: ignore
 from PIL import Image
 import torchvision.transforms as transforms
 import torch
+import time
+from tqdm import tqdm
+import torch.nn as nn
+from torch.utils.tensorboard import SummaryWriter
+
 def save_images(dataset, split_name,output_dir,preprocess=None):
     split_dir = os.path.join(output_dir, split_name)
     os.makedirs(split_dir, exist_ok=True)
@@ -57,6 +62,7 @@ def plot_original_and_reconstructed(model, dataloader, device,num_images=5):
     
     plt.show()
 def plot_random_images(dataset_path, num_images=15, rows=3, cols=5):
+
     images=[]
     for element in os.listdir(dataset_path):
         images.append(os.path.join(dataset_path, element))
@@ -70,3 +76,111 @@ def plot_random_images(dataset_path, num_images=15, rows=3, cols=5):
         plt.imshow(img)
         plt.axis('off')
     plt.show()
+def vae_loss_function(x, x_hat, mean, log_var):
+    reproduction_loss = nn.functional.mse_loss(x_hat, x, reduction='sum')
+    KLD = -0.5 * torch.sum(1 + log_var - mean.pow(2) - log_var.exp())
+   # print(f'Reconstruction Loss: {reproduction_loss.item()}, KL Divergence: {KLD.item()}')
+
+    return reproduction_loss + KLD
+
+def train_autoencoder(model, train_data, val_data, device, epochs=100, lr=1e-4, ckpt_dir="checkpoints", arch_name="model", loss_fn="mse"):
+    """
+    Train an autoencoder or Variational Autoencoder (VAE) using PyTorch.
+
+    Parameters:
+    - model: The autoencoder or VAE model to be trained.
+    - train_data: The training dataset.
+    - val_data: The validation dataset.
+    - device: The device to run the training on (CPU or GPU).
+    - epochs (int): The number of training epochs. Default is 100.
+    - lr (float): The learning rate for the optimizer. Default is 1e-4.
+    - ckpt_dir (str): The directory to save checkpoints. Default is "checkpoints".
+    - arch_name (str): The name of the architecture. Default is "model".
+    - loss_fn (str): The loss function to use. Can be either "mse" for Mean Squared Error or "vae" for Variational Autoencoder loss. Default is "mse".
+
+    Returns:
+    None
+    """
+    # Create a directory for saving checkpoints with the architecture name
+    crt_time = time.strftime("%Y%m%d_%H%M%S")
+    dir_ckpt = os.path.join(ckpt_dir, f"{crt_time}_{arch_name}")
+    os.makedirs(dir_ckpt, exist_ok=True)
+
+    # Set up TensorBoard writer
+    writer = SummaryWriter()
+
+    # Move model to the appropriate device
+    model.to(device)
+
+    # Define optimizer
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+
+    # Select the appropriate loss function
+    if loss_fn == "mse":
+        loss_function = nn.MSELoss()
+    elif loss_fn == "vae":
+        loss_function = vae_loss_function
+    else:
+        raise ValueError("Unsupported loss function type")
+
+    # Training loop
+    for epoch in range(epochs):
+        total_train_loss = 0
+        model.train()  # Set the model to training mode
+
+        with tqdm(train_data, unit="batch", total=len(train_data), desc=f"Epoch {epoch+1}/{epochs}") as tepoch:
+            for batch_idx, data in enumerate(tepoch):
+                data = data.to(device)
+
+                # Forward pass
+                if loss_fn == "vae":
+                    x_hat, mean, logvar = model(data)
+                    loss = loss_function(data, x_hat, mean, logvar)
+                else:
+                    encoded, decoded = model(data)
+                    loss = loss_function(decoded, data)
+
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
+
+                total_train_loss += loss.item() * data.size(0)
+                tepoch.set_postfix(train_loss=total_train_loss / ((batch_idx + 1) * data.size(0)))
+                writer.add_scalar("Loss/train", loss.item(), epoch)
+
+        epoch_train_loss = total_train_loss / len(train_data.dataset)
+
+        # Validation phase
+        model.eval()  # Set the model to evaluation mode
+        total_val_loss = 0
+
+        with torch.no_grad():
+            for data in val_data:
+                data = data.to(device)
+
+                if loss_fn == "vae":
+                    x_hat, mean, logvar = model(data)
+                    val_loss = loss_function(data, x_hat, mean, logvar)
+                else:
+                    encoded, decoded = model(data)
+                    val_loss = loss_function(decoded, data)
+
+                total_val_loss += val_loss.item() * data.size(0)
+
+        epoch_val_loss = total_val_loss / len(val_data.dataset)
+        writer.add_scalar("Loss/val", epoch_val_loss, epoch)
+
+        print(f"Epoch {epoch+1}/{epochs} : train_loss = {epoch_train_loss:.4f}, val_loss = {epoch_val_loss:.4f}")
+
+        # Save checkpoint every 20 epochs
+        if epoch % 20 == 0:
+            ckpt_file = os.path.join(dir_ckpt, f"checkpoint_epoch_{epoch+1}.pt")
+            torch.save({
+                'epoch': epoch,
+                'state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'train_loss': epoch_train_loss,
+                'val_loss': epoch_val_loss,
+            }, ckpt_file)
+
+    writer.close()
