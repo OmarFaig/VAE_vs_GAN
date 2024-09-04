@@ -22,7 +22,7 @@ def save_images(dataset, split_name,output_dir,preprocess=None):
         image_path = os.path.join(split_dir, f'image_{idx}.png')
         image.save(image_path,"jpeg")
 # Save preprocessed training images
-def plot_original_and_reconstructed(model, dataloader, device,num_images=5):
+def plot_original_and_reconstructed(model, dataloader, device, num_images=5):
     model.to(device)
     model.eval()  # Set the model to evaluation mode
     
@@ -32,12 +32,23 @@ def plot_original_and_reconstructed(model, dataloader, device,num_images=5):
     with torch.no_grad():
         for _, data in enumerate(dataloader):
             data = data.to(device)  # Move data to the same device as the model
-            _, reconstructed = model(data)
             
+            # Adjust based on the model architecture
+            output = model(data)
+            
+            if len(output) == 2:
+                    # This is likely a standard autoencoder (encoded, reconstructed)
+                    reconstructed = output[1]
+            elif len(output) == 3:
+                    # This is likely a VAE (reconstructed, mu, logvar)
+                    reconstructed = output[0]
+
             # Move tensors back to CPU for visualization
             data = data.cpu().numpy()
             reconstructed = reconstructed.cpu().numpy()
-            print(f"Original shape: {data.shape}, Reconstructed shape: {reconstructed.shape}")  # Debugging output
+
+            # Debug: print shapes
+            #print(f"Original shape: {data.shape}, Reconstructed shape: {reconstructed.shape}")
 
             images.extend(data[:num_images])  # Original images
             reconstructed_images.extend(reconstructed[:num_images])  # Reconstructed images
@@ -50,17 +61,34 @@ def plot_original_and_reconstructed(model, dataloader, device,num_images=5):
     for i in range(num_images):
         # Original images
         plt.subplot(2, num_images, i + 1)
-        plt.imshow(images[i].reshape(3, 50, 50).transpose(1, 2, 0))  # Reshape and transpose for RGB
+        original_image = images[i].reshape(3, 50, 50).transpose(1, 2, 0)
+        plt.imshow(original_image)
         plt.title("Original")
         plt.axis('off')
         
         # Reconstructed images
         plt.subplot(2, num_images, num_images + i + 1)
-        plt.imshow(reconstructed_images[i].reshape(3, 50, 50).transpose(1, 2, 0))  # Reshape and transpose for RGB
+        print(f"Reconstructed Image {i} shape: {reconstructed_images[i].shape}")  # Print the shape for debugging
+        # Adjust reshape based on actual reconstructed size
+        try:
+            if reconstructed_images[i].size == 3 * 50 * 50:
+                reconstructed_image = reconstructed_images[i].reshape(3, 50, 50).transpose(1, 2, 0)
+            else:
+                # Handle other cases; in VAEs this might differ based on the latent space size and output
+                reconstructed_image = reconstructed_images[i].reshape(-1, 50, 50).transpose(1, 2, 0)
+        except ValueError as e:
+            print(f"Error reshaping image {i}: {e}")
+            continue
+        
+        plt.imshow(reconstructed_image)
         plt.title("Reconstructed")
         plt.axis('off')
-    
     plt.show()
+
+# Assuming you want to plot 5 images
+
+
+
 def plot_random_images(dataset_path, num_images=15, rows=3, cols=5):
 
     images=[]
@@ -82,6 +110,31 @@ def vae_loss_function(x, x_hat, mean, log_var):
    # print(f'Reconstruction Loss: {reproduction_loss.item()}, KL Divergence: {KLD.item()}')
 
     return reproduction_loss + KLD
+def generate_new_images_vae(model, num_images, latent_dim, device):
+    model.to(device)
+    model.eval()  # Set the model to evaluation mode
+
+    with torch.no_grad():
+        # Sample from the standard normal distribution
+        z = torch.randn(num_images, latent_dim).to(device)
+        
+        # Pass through the decoder part of the VAE
+        generated_images = model.decode(z)  # Ensure your VAE has a decode method
+
+        # Move tensors back to CPU for visualization
+        generated_images = generated_images.cpu().numpy()
+
+    # Plot the generated images
+    plt.figure(figsize=(15, 5))
+    for i in range(num_images):
+        plt.subplot(1, num_images, i + 1)
+        plt.imshow(generated_images[i].transpose(1, 2, 0))  # Transpose for RGB display
+        plt.title("Generated")
+        plt.axis('off')
+    
+    plt.show()
+
+# Assuming your VAE has a latent dimension of 512
 
 def train_autoencoder(model, train_data, val_data, device, epochs=100, lr=1e-4, ckpt_dir="checkpoints", arch_name="model", loss_fn="mse"):
     """
