@@ -8,6 +8,7 @@ import time
 from tqdm import tqdm
 import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
+import torch.optim.lr_scheduler as lr_scheduler
 
 def save_images(dataset, split_name,output_dir,preprocess=None):
     split_dir = os.path.join(output_dir, split_name)
@@ -61,7 +62,7 @@ def plot_original_and_reconstructed(model, dataloader, device, num_images=5):
     for i in range(num_images):
         # Original images
         plt.subplot(2, num_images, i + 1)
-        original_image = images[i].reshape(3, 50, 50).transpose(1, 2, 0)
+        original_image = images[i].reshape(3, 156, 156).transpose(1, 2, 0)
         plt.imshow(original_image)
         plt.title("Original")
         plt.axis('off')
@@ -71,11 +72,11 @@ def plot_original_and_reconstructed(model, dataloader, device, num_images=5):
         print(f"Reconstructed Image {i} shape: {reconstructed_images[i].shape}")  # Print the shape for debugging
         # Adjust reshape based on actual reconstructed size
         try:
-            if reconstructed_images[i].size == 3 * 50 * 50:
-                reconstructed_image = reconstructed_images[i].reshape(3, 50, 50).transpose(1, 2, 0)
+            if reconstructed_images[i].size == 3 * 156 * 156:
+                reconstructed_image = reconstructed_images[i].reshape(3, 156, 156).transpose(1, 2, 0)
             else:
                 # Handle other cases; in VAEs this might differ based on the latent space size and output
-                reconstructed_image = reconstructed_images[i].reshape(-1, 50, 50).transpose(1, 2, 0)
+                reconstructed_image = reconstructed_images[i].reshape(-1, 156, 156).transpose(1, 2, 0)
         except ValueError as e:
             print(f"Error reshaping image {i}: {e}")
             continue
@@ -134,8 +135,7 @@ def generate_new_images_vae(model, num_images, latent_dim, device):
     
     plt.show()
 
-# Assuming your VAE has a latent dimension of 512
-
+# Assuming your VAE has a latent d
 def train_autoencoder(model, train_data, val_data, device, epochs=100, lr=1e-4, ckpt_dir="checkpoints", arch_name="model", loss_fn="mse"):
     """
     Train an autoencoder or Variational Autoencoder (VAE) using PyTorch.
@@ -167,6 +167,9 @@ def train_autoencoder(model, train_data, val_data, device, epochs=100, lr=1e-4, 
 
     # Define optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+
+    # Define learning rate scheduler
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
 
     # Select the appropriate loss function
     if loss_fn == "mse":
@@ -200,6 +203,9 @@ def train_autoencoder(model, train_data, val_data, device, epochs=100, lr=1e-4, 
                 total_train_loss += loss.item() * data.size(0)
                 tepoch.set_postfix(train_loss=total_train_loss / ((batch_idx + 1) * data.size(0)))
                 writer.add_scalar("Loss/train", loss.item(), epoch)
+
+        # Step the learning rate scheduler
+        scheduler.step()
 
         epoch_train_loss = total_train_loss / len(train_data.dataset)
 
