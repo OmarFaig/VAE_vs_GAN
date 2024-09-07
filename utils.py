@@ -169,7 +169,7 @@ def train_autoencoder(model, train_data, val_data, device, epochs=100, lr=1e-4, 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
     # Define learning rate scheduler
-    scheduler = lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.1)
+    scheduler = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
 
     # Select the appropriate loss function
     if loss_fn == "mse":
