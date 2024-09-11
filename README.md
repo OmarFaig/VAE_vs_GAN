@@ -13,6 +13,10 @@ The linear autoencoder uses fully connected layers and ReLU activations to compr
 ### 2. **Convolutional Autoencoder**
 
 In the convolutional autoencoder, convolutional layers are used instead of fully connected layers, allowing the model to better capture spatial hierarchies in the input images.
+The results looks like the following:
+![alt text](https://github.com/[username]/[reponame]/blob/[branch]/image.jpg?raw=true)
+
+
 
 ### 3. **Variational Autoencoder (VAE)**
 
