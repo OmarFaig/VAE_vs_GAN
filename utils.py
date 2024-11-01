@@ -1,5 +1,6 @@
 import os
 import random
+import numpy as np
 import matplotlib.pyplot as plt # type: ignore
 from PIL import Image
 import torchvision.transforms as transforms
@@ -243,3 +244,42 @@ def train_autoencoder(model, train_data, val_data, device, epochs=100, lr=1e-4, 
             }, ckpt_file)
 
     writer.close()
+
+def set_all_seeds(seed):
+    os.environ["PL_GLOBAL_SEED"] = str(seed)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+class ImageDataset(torch.utils.data.Dataset):
+    def __init__(self, image_folder, img_size=156, flatten=False,transform=None):
+        """
+        Args:
+            image_folder (str): Path to the folder containing images.
+            img_size (int): Size to which each image is resized.
+            flatten (bool): Whether to flatten the image into a 1D array.
+        """
+        self.image_folder = image_folder
+        self.img_size = img_size
+        self.flatten = flatten
+        self.images = os.listdir(image_folder)
+        if transform is not None:
+            self.transform = transform
+        else:
+            self.transform = transforms.Compose([
+                transforms.Resize((img_size, img_size)),  # Resize images to img_size x img_size
+                transforms.ToTensor()                    # Convert images to PyTorch tensors
+            ])
+
+    def __getitem__(self, idx):
+        image_file = self.images[idx]
+        image = Image.open(os.path.join(self.image_folder, image_file))
+        image = self.transform(image)
+
+        if self.flatten:
+            image = np.array(image).reshape(-1,156*156) # Flatten the image into a 1D array
+
+        return image
+
+    def __len__(self):
+        return len(self.images)
