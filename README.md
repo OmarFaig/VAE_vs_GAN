@@ -21,3 +21,8 @@ The results looks like the following:
 The VAE is a probabilistic model that maps the input images to a latent distribution. The encoder outputs mean and variance parameters, which are used to sample from a latent space. The decoder then reconstructs the images based on the sampled latent variables. This architecture enables the generation of new images that are similar to the input data but not identical.
 The results looks like the following:
 ![alt text](res_imgs/image_vae.png)
+
+### 4 . ** Generative Adversarial Networks (GAN)**
+
+Another famous generative model is GAN. Here a DCGAN model is implemented, for implementation some parts of codes from this [repo](https://github.com/rasbt/stat453-deep-learning-ss21/tree/main/L18) is used. The results from GAN looks like the following :
+![alt text](res_imgs/GAN.png)
